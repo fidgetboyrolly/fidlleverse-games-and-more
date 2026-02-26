@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Fake SBS VR</title>
+  <title>Fake SBS VR + Pointer + Movement + WakeLock</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
@@ -17,6 +17,27 @@
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
+  <!-- WAKE LOCK -->
+  <script>
+    AFRAME.registerComponent('wake-lock', {
+      init() {
+        let lock = null;
+
+        const requestLock = async () => {
+          try {
+            lock = await navigator.wakeLock.request("screen");
+            lock.addEventListener("release", requestLock);
+          } catch (e) {
+            console.warn("WakeLock failed:", e);
+          }
+        };
+
+        if ("wakeLock" in navigator) requestLock();
+      }
+    });
+  </script>
+
+  <!-- SBS RENDERER -->
   <script>
     AFRAME.registerComponent('fake-sbs', {
       init: function () {
@@ -27,29 +48,19 @@
           const renderer = sceneEl.renderer;
           const scene = sceneEl.object3D;
 
-          // Ensure main camera exists
           const mainCamObj = mainCamEl.getObject3D('camera') || mainCamEl.object3D;
-          if (!mainCamObj) {
-            console.warn('Main camera not ready for fake-sbs');
-            return;
-          }
 
-          // Create two eye cameras
           const camL = new THREE.PerspectiveCamera();
           const camR = new THREE.PerspectiveCamera();
 
-          // Attach to main camera rig so they inherit position/rotation
           mainCamObj.add(camL);
           mainCamObj.add(camR);
 
-          // Stereo offset (fake IPD)
           const IPD = 0.03;
           camL.position.set(-IPD / 2, 0, 0);
           camR.position.set( IPD / 2, 0, 0);
 
           renderer.autoClear = false;
-
-          // Wrap original render
           const origRender = renderer.render.bind(renderer);
 
           renderer.render = function (origScene, origCamera) {
@@ -57,7 +68,6 @@
             const w = canvas.clientWidth;
             const h = canvas.clientHeight;
 
-            // Sync eye cameras with main camera params
             if (origCamera && origCamera.isPerspectiveCamera) {
               camL.fov = camR.fov = origCamera.fov;
               camL.near = camR.near = origCamera.near;
@@ -66,44 +76,70 @@
               camR.updateProjectionMatrix();
             }
 
-            // Clear once
             renderer.setSize(w, h, false);
-            renderer.setScissorTest(false);
             renderer.clear(true, true, true);
 
-            // LEFT EYE
             renderer.setViewport(0, 0, w / 2, h);
             renderer.setScissor(0, 0, w / 2, h);
             renderer.setScissorTest(true);
             origRender(scene, camL);
 
-            // RIGHT EYE
             renderer.setViewport(w / 2, 0, w / 2, h);
             renderer.setScissor(w / 2, 0, w / 2, h);
             renderer.setScissorTest(true);
             origRender(scene, camR);
 
-            // Reset scissor for any other internal rendering
             renderer.setScissorTest(false);
           };
         });
       }
     });
   </script>
+
+  <!-- MOVEMENT SYSTEM -->
+  <script>
+    AFRAME.registerComponent('move-to', {
+      schema: {target: {type: 'selector'}},
+      init() {
+        this.el.addEventListener('click', () => {
+          const rig = document.querySelector('#rig');
+          const pos = this.el.object3D.position;
+          rig.setAttribute('position', `${pos.x} 0 ${pos.z}`);
+        });
+      }
+    });
+  </script>
+
 </head>
 
 <body>
-  <a-scene fake-sbs>
-    <a-entity id="mainCam"
-              camera
-              look-controls="magicWindowTrackingEnabled: true"
-              position="0 1.6 0">
+  <a-scene fake-sbs wake-lock cursor="rayOrigin: mouse">
+
+    <!-- CAMERA RIG -->
+    <a-entity id="rig" position="0 0 0">
+      <a-entity id="mainCam"
+                camera
+                look-controls="magicWindowTrackingEnabled: true"
+                position="0 1.6 0"
+                raycaster="objects: .clickable">
+        <a-entity cursor="fuse: false"
+                  position="0 0 -1"
+                  geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.015"
+                  material="color: black; shader: flat">
+        </a-entity>
+      </a-entity>
     </a-entity>
 
+    <!-- OBJECTS -->
     <a-box position="0 1 -3" color="#4CC3D9"></a-box>
     <a-sphere position="2 1.25 -4" radius="1.25" color="#EF2D5E"></a-sphere>
     <a-cylinder position="-2 0.75 -3" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder>
     <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="#7BC8A4"></a-plane>
+
+    <!-- MOVEMENT ARROWS -->
+    <a-triangle class="clickable" move-to position="0 0 -2" rotation="-90 0 0" color="yellow"></a-triangle>
+    <a-triangle class="clickable" move-to position="2 0 -2" rotation="-90 0 0" color="yellow"></a-triangle>
+    <a-triangle class="clickable" move-to position="-2 0 -2" rotation="-90 0 0" color="yellow"></a-triangle>
 
     <a-sky color="#ECECEC"></a-sky>
   </a-scene>
