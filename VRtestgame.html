@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fake SBS VR</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    html, body, a-scene, canvas {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+  </style>
+
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+  <script>
+    AFRAME.registerComponent('fake-sbs', {
+      init: function () {
+        const sceneEl = this.el;
+        const mainCamEl = document.querySelector('#mainCam');
+
+        sceneEl.addEventListener('loaded', () => {
+          const renderer = sceneEl.renderer;
+          const scene = sceneEl.object3D;
+
+          // Ensure main camera exists
+          const mainCamObj = mainCamEl.getObject3D('camera') || mainCamEl.object3D;
+          if (!mainCamObj) {
+            console.warn('Main camera not ready for fake-sbs');
+            return;
+          }
+
+          // Create two eye cameras
+          const camL = new THREE.PerspectiveCamera();
+          const camR = new THREE.PerspectiveCamera();
+
+          // Attach to main camera rig so they inherit position/rotation
+          mainCamObj.add(camL);
+          mainCamObj.add(camR);
+
+          // Stereo offset (fake IPD)
+          const IPD = 0.03;
+          camL.position.set(-IPD / 2, 0, 0);
+          camR.position.set( IPD / 2, 0, 0);
+
+          renderer.autoClear = false;
+
+          // Wrap original render
+          const origRender = renderer.render.bind(renderer);
+
+          renderer.render = function (origScene, origCamera) {
+            const canvas = renderer.domElement;
+            const w = canvas.clientWidth;
+            const h = canvas.clientHeight;
+
+            // Sync eye cameras with main camera params
+            if (origCamera && origCamera.isPerspectiveCamera) {
+              camL.fov = camR.fov = origCamera.fov;
+              camL.near = camR.near = origCamera.near;
+              camL.far  = camR.far  = origCamera.far;
+              camL.updateProjectionMatrix();
+              camR.updateProjectionMatrix();
+            }
+
+            // Clear once
+            renderer.setSize(w, h, false);
+            renderer.setScissorTest(false);
+            renderer.clear(true, true, true);
+
+            // LEFT EYE
+            renderer.setViewport(0, 0, w / 2, h);
+            renderer.setScissor(0, 0, w / 2, h);
+            renderer.setScissorTest(true);
+            origRender(scene, camL);
+
+            // RIGHT EYE
+            renderer.setViewport(w / 2, 0, w / 2, h);
+            renderer.setScissor(w / 2, 0, w / 2, h);
+            renderer.setScissorTest(true);
+            origRender(scene, camR);
+
+            // Reset scissor for any other internal rendering
+            renderer.setScissorTest(false);
+          };
+        });
+      }
+    });
+  </script>
+</head>
+
+<body>
+  <a-scene fake-sbs>
+    <a-entity id="mainCam"
+              camera
+              look-controls="magicWindowTrackingEnabled: true"
+              position="0 1.6 0">
+    </a-entity>
+
+    <a-box position="0 1 -3" color="#4CC3D9"></a-box>
+    <a-sphere position="2 1.25 -4" radius="1.25" color="#EF2D5E"></a-sphere>
+    <a-cylinder position="-2 0.75 -3" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder>
+    <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="#7BC8A4"></a-plane>
+
+    <a-sky color="#ECECEC"></a-sky>
+  </a-scene>
+</body>
+</html>
