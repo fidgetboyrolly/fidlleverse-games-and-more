@@ -1,17 +1,12 @@
 (function() {
 
-    const plugin = {
-        id: "rowen_pmat_exporter",
+    Plugin.register("rowen_pmat_exporter", {
         title: "Polymat (.pmat) Exporter",
-        icon: "icon-format",
+        icon: "icon-export",
         author: "Copilot",
         description: "Exports models into Rowen's Polymat (.pmat) triangle format",
         version: "1.0.0",
         min_version: "4.0.0",
-        variant: "both"
-    };
-
-    Plugin.register(plugin, {
 
         onload() {
 
@@ -24,12 +19,11 @@
                     let triangles = [];
 
                     Project.meshes.forEach(mesh => {
-
                         mesh.faces.forEach(face => {
 
                             let verts = face.getSortedVertices();
-
                             let triList = [];
+
                             if (verts.length === 3) {
                                 triList.push(verts);
                             } else if (verts.length === 4) {
@@ -39,32 +33,23 @@
 
                             triList.forEach(tri => {
 
-                                let triData = tri.map(v => {
-                                    return [
-                                        Number(v.x),
-                                        Number(v.y),
-                                        Number(v.z)
-                                    ];
-                                });
+                                let triData = tri.map(v => [v.x, v.y, v.z]);
 
-                                let colorInfo = null;
+                                let colorInfo;
 
                                 if (face.texture) {
                                     colorInfo = "t:" + face.texture.name;
                                 } else if (face.color) {
-                                    let c = face.color;
-                                    colorInfo = [c.h, c.s, c.v];
+                                    colorInfo = [face.color.h, face.color.s, face.color.v];
                                 } else {
                                     colorInfo = [0, 0, 1];
                                 }
 
                                 triData.push(colorInfo);
-
                                 triangles.push(triData);
                             });
 
                         });
-
                     });
 
                     Blockbench.export({
