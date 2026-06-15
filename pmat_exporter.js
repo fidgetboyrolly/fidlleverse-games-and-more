@@ -1,7 +1,7 @@
 Plugin.register("pmat_exporter", {
     title: "Polymat Exporter",
     icon: "icon-export",
-    author: "Rowen",
+    author: "fidgetboyrolly",
     description: "Exports models to .pmat triangle format",
     version: "1.0.0",
     min_version: "4.0.0",
